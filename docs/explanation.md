@@ -41,11 +41,9 @@ Cette limite est à mentionner explicitement quand on présente le projet.
 
 ## 2. Le dataset
 
-### C'est quoi un dataset ?
-
-Un dataset (jeu de données) est une collection d'exemples utilisés pour entraîner et évaluer notre algorithme. Ici, chaque exemple est un exercice Codeforces.
-
 ### Structure du dataset
+
+Ici, chaque exemple est un exercice Codeforces.
 
 Le dataset contient **4982 fichiers JSON**. Un fichier JSON est un format texte structuré pour stocker des données, comme un dictionnaire Python.
 
