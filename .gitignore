@@ -1,0 +1,25 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Models & data
+models/
+data/
+
+# Embeddings & cache
+*.npy
+*.pkl
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Results
+*.json
+*.csv
