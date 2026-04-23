@@ -64,7 +64,7 @@ def print_comparison(metrics_b, metrics_o):
     print("\n" + "=" * 65)
     print("COMPARAISON BASELINE vs OPTIMIZED")
     print("=" * 65)
-    print(f"\n{'Métrique':<30} {'Baseline':>10} {'Optimized':>10} {'Delta':>10}")
+    print(f"\n{'Metric':<30} {'Baseline':>10} {'Optimized':>10} {'Delta':>10}")
     print("-" * 65)
 
     for key in ["f1_micro", "f1_macro", "hamming_loss"]:
@@ -81,27 +81,27 @@ def print_comparison(metrics_b, metrics_o):
 if __name__ == "__main__":
     TEST_PATH = "data/test_set_optimized.csv"
 
-    print(f"[INFO] Chargement du dataset de test : {TEST_PATH}")
+    print(f"[INFO] Loading test dataset: {TEST_PATH}")
     df_test = pd.read_csv(TEST_PATH)
     df_test["tags"] = df_test["tags"].apply(ast.literal_eval)
     y_true = build_y(df_test)
 
     # --- Baseline ---
-    print("\n[INFO] Évaluation BASELINE...")
+    print("\n[INFO] Evaluating BASELINE...")
     clf_b, vec_b, scaler_b = load_baseline()
     X_test_b = build_X_baseline(df_test, vec_b, scaler_b)
     y_pred_b = clf_b.predict(X_test_b)
     metrics_b = evaluate(y_true, y_pred_b, label="BASELINE — TF-IDF + LogisticRegression")
 
     # --- Optimized ---
-    print("\n[INFO] Évaluation OPTIMIZED...")
+    print("\n[INFO] Evaluating OPTIMIZED...")
     clf_o, vec_o, scaler_o, thresholds = load_optimized()
     X_emb_full = np.load("models/optimized/embeddings_cache.npy")
     test_idx = np.load(f"{OPTIMIZED_MODEL_DIR}/test_indices.npy")
     X_emb_test = X_emb_full[test_idx]
     X_test_o = build_X_optimized(df_test, vec_o, scaler_o, X_emb_test)
     y_pred_o = predict_with_thresholds(clf_o, X_test_o, thresholds)
-    metrics_o = evaluate(y_true, y_pred_o, label="OPTIMIZED — LightGBM + Embeddings + Seuils")
+    metrics_o = evaluate(y_true, y_pred_o, label="OPTIMIZED — LightGBM + Embeddings + Thresholds")
 
     # --- Comparaison ---
     print_comparison(metrics_b, metrics_o)

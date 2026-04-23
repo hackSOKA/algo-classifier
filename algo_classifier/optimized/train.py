@@ -19,7 +19,7 @@ def build_labels(df):
 
 
 def build_feature_pipeline(df_train, df_full, train_idx):
-    print("[INFO] Construction du texte TF-IDF...")
+    print("[INFO] Building TF-IDF text...")
     texts_train = df_train.apply(build_text_input, axis=1).tolist()
 
     vectorizer = TfidfVectorizer(
@@ -31,7 +31,7 @@ def build_feature_pipeline(df_train, df_full, train_idx):
     X_tfidf = vectorizer.fit_transform(texts_train)
     print(f"[INFO] TF-IDF shape : {X_tfidf.shape}")
 
-    print("[INFO] Construction des features numériques + embeddings...")
+    print("[INFO] Building numerical features + embeddings...")
     X_meta_full, feature_names = build_feature_matrix(df_full)
     X_meta = X_meta_full[train_idx]
 
@@ -39,7 +39,7 @@ def build_feature_pipeline(df_train, df_full, train_idx):
     X_meta_scaled = scaler.fit_transform(X_meta)
 
     X = hstack([X_tfidf, csr_matrix(X_meta_scaled)])
-    print(f"[INFO] Feature matrix finale : {X.shape}")
+    print(f"[INFO] Final feature matrix: {X.shape}")
 
     return X, vectorizer, scaler, X_meta_full, feature_names
 
@@ -57,7 +57,7 @@ def build_test_features(df_test, test_idx, vectorizer, scaler, X_meta_full):
 def optimize_thresholds(clf, X_val, y_val):
     from sklearn.metrics import f1_score
 
-    print("[INFO] Optimisation des seuils par tag...")
+    print("[INFO] Optimizing thresholds per tag...")
     proba = clf.predict_proba(X_val)
     thresholds = {}
 
@@ -76,13 +76,13 @@ def optimize_thresholds(clf, X_val, y_val):
 
 
 def train_model(X, y):
-    print("[INFO] Entraînement LightGBM OneVsRest...")
+    print("[INFO] Training LightGBM OneVsRest...")
     clf = OneVsRestClassifier(
         LGBMClassifier(**LGBM_PARAMS),
         n_jobs=1,
     )
     clf.fit(X, y)
-    print("[INFO] Entraînement terminé.")
+    print("[INFO] Training complete.")
     return clf
 
 
@@ -102,7 +102,7 @@ def save_model(clf, vectorizer, scaler, thresholds, train_idx, test_idx, model_d
     np.save(model_dir / "train_indices.npy", train_idx)
     np.save(model_dir / "test_indices.npy", test_idx)
 
-    print(f"[INFO] Modèle sauvegardé dans {model_dir}/")
+    print(f"[INFO] Model saved to {model_dir}/")
 
 
 def load_model(model_dir=MODEL_DIR):
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     )
     df_train = df.iloc[train_idx].reset_index(drop=True)
     df_test  = df.iloc[test_idx].reset_index(drop=True)
-    print(f"[INFO] Train : {len(df_train)} | Test : {len(df_test)}")
+    print(f"[INFO] Train: {len(df_train)} | Test: {len(df_test)}")
 
     df_test.to_csv("data/test_set_optimized.csv", index=False)
 

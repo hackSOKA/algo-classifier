@@ -54,52 +54,52 @@ def predict_single(row: pd.Series, clf, vectorizer, scaler, thresholds) -> dict:
 
 def format_output(results: dict, input_path: str) -> None:
     print("\n" + "=" * 55)
-    print(f"PRÉDICTION — {Path(input_path).name}")
+    print(f"PREDICTION — {Path(input_path).name}")
     print("=" * 55)
 
-    print("\nTags prédits :")
+    print("\nPredicted tags:")
     predicted = [tag for tag, v in results.items() if v["predicted"]]
     if predicted:
         for tag in predicted:
             proba = results[tag]["probability"]
             thresh = results[tag]["threshold"]
             bar = "█" * int(proba * 20)
-            print(f"  ✅ {tag:<16} {proba:.3f} (seuil={thresh:.3f})  {bar}")
+            print(f"  ✅ {tag:<16} {proba:.3f} (threshold={thresh:.3f})  {bar}")
     else:
-        print("  Aucun tag prédit.")
+        print("  No tag predicted.")
 
-    print("\nTous les scores :")
+    print("\nAll scores:")
     for tag, v in sorted(results.items(), key=lambda x: -x[1]["probability"]):
         proba = v["probability"]
         thresh = v["threshold"]
         marker = "✅" if v["predicted"] else "  "
         bar = "█" * int(proba * 20)
-        print(f"  {marker} {tag:<16} {proba:.3f} (seuil={thresh:.3f})  {bar}")
+        print(f"  {marker} {tag:<16} {proba:.3f} (threshold={thresh:.3f})  {bar}")
 
     print("=" * 55 + "\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Prédit les tags d'un exercice algorithmique (modèle optimisé)."
+        description="Predict tags for an algorithmic exercise (optimized model)."
     )
     parser.add_argument("--input", type=str, required=True)
     parser.add_argument("--model_dir", type=str, default=MODEL_DIR)
     args = parser.parse_args()
 
-    print("[INFO] Chargement du modèle...")
+    print("[INFO] Loading model...")
     clf, vectorizer, scaler, thresholds = load_model(args.model_dir)
-    print(f"[INFO] Seuils chargés : {thresholds}")
+    print(f"[INFO] Thresholds loaded: {thresholds}")
 
-    print(f"[INFO] Chargement de l'exercice : {args.input}")
+    print(f"[INFO] Loading exercise: {args.input}")
     with open(args.input, "r", encoding="utf-8") as f:
         exercise = json.load(f)
     row = pd.Series(exercise)
 
-    print("[INFO] Prédiction en cours...")
+    print("[INFO] Running prediction...")
     start = time.time()
     results = predict_single(row, clf, vectorizer, scaler, thresholds)
     elapsed = time.time() - start
-    print(f"[INFO] Temps de prédiction : {elapsed:.3f}s")
+    print(f"[INFO] Prediction time: {elapsed:.3f}s")
 
     format_output(results, args.input)

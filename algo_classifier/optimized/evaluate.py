@@ -70,12 +70,12 @@ def predict_with_thresholds(clf, X, thresholds):
     return y_pred
 
 
-def evaluate(y_true, y_pred, label="MODÈLE"):
+def evaluate(y_true, y_pred, label="MODEL"):
     print("\n" + "=" * 65)
-    print(f"ÉVALUATION — {label}")
+    print(f"EVALUATION — {label}")
     print("=" * 65)
 
-    print(f"\n{'Tag':<16} {'Précision':>10} {'Rappel':>10} {'F1':>10} {'Support':>10}")
+    print(f"\n{'Tag':<16} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>10}")
     print("-" * 60)
 
     for i, tag in enumerate(TARGET_TAGS):
@@ -91,7 +91,7 @@ def evaluate(y_true, y_pred, label="MODÈLE"):
     hl = hamming_loss(y_true, y_pred)
 
     print(f"\n  {'F1 micro (global)':<30} {f1_micro:.3f}")
-    print(f"  {'F1 macro (moyenne par tag)':<30} {f1_macro:.3f}")
+    print(f"  {'F1 macro (avg per tag)':<30} {f1_macro:.3f}")
     print(f"  {'Hamming Loss':<30} {hl:.4f}")
     print("\n" + "=" * 65 + "\n")
 
@@ -100,30 +100,30 @@ def evaluate(y_true, y_pred, label="MODÈLE"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Évalue le modèle optimisé sur un dataset de test."
+        description="Evaluate the optimized model on a test dataset."
     )
     parser.add_argument("--test_path", type=str, default="data/test_set_optimized.csv")
     parser.add_argument("--model_dir", type=str, default=MODEL_DIR)
     args = parser.parse_args()
 
-    print("[INFO] Chargement du modèle...")
+    print("[INFO] Loading model...")
     clf, vectorizer, scaler, thresholds = load_model(args.model_dir)
-    print(f"[INFO] Seuils chargés : {thresholds}")
+    print(f"[INFO] Thresholds loaded: {thresholds}")
 
-    print(f"[INFO] Chargement du dataset de test : {args.test_path}")
+    print(f"[INFO] Loading test dataset: {args.test_path}")
     df_test = pd.read_csv(args.test_path)
     df_test["tags"] = df_test["tags"].apply(ast.literal_eval)
 
-    print("[INFO] Chargement des embeddings...")
+    print("[INFO] Loading embeddings...")
     X_emb_full = np.load("models/optimized/embeddings_cache.npy")
     test_idx = np.load(f"{args.model_dir}/test_indices.npy")
     X_emb_test = X_emb_full[test_idx]
 
-    print("[INFO] Construction des features...")
+    print("[INFO] Building features...")
     X_test = build_X(df_test, vectorizer, scaler, X_emb=X_emb_test)
     y_true = build_y(df_test)
 
-    print("[INFO] Prédiction...")
+    print("[INFO] Predicting...")
     y_pred = predict_with_thresholds(clf, X_test, thresholds)
 
-    evaluate(y_true, y_pred, label="OPTIMIZED — LightGBM + Embeddings + Seuils")
+    evaluate(y_true, y_pred, label="OPTIMIZED — LightGBM + Embeddings + Thresholds")

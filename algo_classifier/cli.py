@@ -1,11 +1,11 @@
 """
-CLI principal du projet algo-classifier.
+Main CLI for the algo-classifier project.
 
-Sous-commandes disponibles :
-    train      Entraîne le modèle baseline ou optimized
-    evaluate   Évalue un modèle sur le test set
-    predict    Prédit les tags d'un exercice JSON
-    compare    Compare baseline vs optimized sur le même test set
+Available sub-commands:
+    train      Train the baseline or optimized model
+    evaluate   Evaluate a model on the test set
+    predict    Predict tags for a JSON exercise
+    compare    Compare baseline vs optimized on the same test set
 """
 
 import argparse
@@ -13,7 +13,7 @@ import sys
 
 
 # ---------------------------------------------------------------------------
-# Handlers — chaque sous-commande est isolée pour éviter les imports inutiles
+# Handlers — each sub-command is isolated to avoid unnecessary imports
 # ---------------------------------------------------------------------------
 
 def cmd_train(args):
@@ -24,7 +24,7 @@ def cmd_train(args):
         from algo_classifier.data_loader import load_dataset, add_binary_tag_columns
         from sklearn.model_selection import train_test_split
 
-        print("[INFO] === ENTRAÎNEMENT BASELINE ===")
+        print("[INFO] === TRAINING BASELINE ===")
         df = load_dataset(args.data_dir)
         df = add_binary_tag_columns(df)
         df_train, df_test = train_test_split(df, test_size=0.2, random_state=42)
@@ -44,7 +44,7 @@ def cmd_train(args):
         from algo_classifier.data_loader import load_dataset, add_binary_tag_columns
         from sklearn.model_selection import train_test_split
 
-        print("[INFO] === ENTRAÎNEMENT OPTIMIZED ===")
+        print("[INFO] === TRAINING OPTIMIZED ===")
         df = load_dataset(args.data_dir)
         df = add_binary_tag_columns(df)
 
@@ -69,7 +69,7 @@ def cmd_train(args):
         save_model(clf, vectorizer, scaler, thresholds, train_idx, test_idx, model_dir=out)
 
     else:
-        print(f"[ERROR] --model doit être 'baseline' ou 'optimized', pas '{args.model}'")
+        print(f"[ERROR] --model must be 'baseline' or 'optimized', got '{args.model}'")
         sys.exit(1)
 
 
@@ -79,7 +79,7 @@ def cmd_evaluate(args):
         import pandas as pd
         from algo_classifier.baseline.evaluate import load_model, build_X, build_y, evaluate
 
-        print("[INFO] === ÉVALUATION BASELINE ===")
+        print("[INFO] === EVALUATION BASELINE ===")
         clf, vectorizer, scaler = load_model(args.model_dir or "models/baseline")
         df_test = pd.read_csv(args.test_path or "data/test_set.csv")
         df_test["tags"] = df_test["tags"].apply(ast.literal_eval)
@@ -92,7 +92,7 @@ def cmd_evaluate(args):
             import json
             with open("results_baseline.json", "w") as f:
                 json.dump(metrics_b, f, indent=2)
-            print("[INFO] Résultats exportés → results_baseline.json")
+            print("[INFO] Results exported → results_baseline.json")
 
     if args.model in ("optimized", "both"):
         import ast
@@ -103,7 +103,7 @@ def cmd_evaluate(args):
         )
         from algo_classifier.optimized.config import MODEL_DIR
 
-        print("[INFO] === ÉVALUATION OPTIMIZED ===")
+        print("[INFO] === EVALUATION OPTIMIZED ===")
         model_dir = args.model_dir or MODEL_DIR
         clf, vectorizer, scaler, thresholds = load_model(model_dir)
         df_test = pd.read_csv(args.test_path or "data/test_set_optimized.csv")
@@ -116,13 +116,13 @@ def cmd_evaluate(args):
         X_test = build_X(df_test, vectorizer, scaler, X_emb=X_emb_test)
         y_true = build_y(df_test)
         y_pred = predict_with_thresholds(clf, X_test, thresholds)
-        metrics_o = evaluate(y_true, y_pred, label="OPTIMIZED — LightGBM + Embeddings + Seuils")
+        metrics_o = evaluate(y_true, y_pred, label="OPTIMIZED — LightGBM + Embeddings + Thresholds")
 
         if args.export == "json":
             import json
             with open("results_optimized.json", "w") as f:
                 json.dump(metrics_o, f, indent=2)
-            print("[INFO] Résultats exportés → results_optimized.json")
+            print("[INFO] Results exported → results_optimized.json")
 
 
 def cmd_predict(args):
@@ -130,7 +130,7 @@ def cmd_predict(args):
     import pandas as pd
 
     if not args.input:
-        print("[ERROR] --input requis pour la commande predict.")
+        print("[ERROR] --input is required for the predict command.")
         sys.exit(1)
 
     with open(args.input, "r", encoding="utf-8") as f:
@@ -148,7 +148,7 @@ def cmd_predict(args):
         results = predict_single(row, clf, vectorizer, scaler, thresholds)
 
     else:
-        print(f"[ERROR] --model doit être 'baseline' ou 'optimized'")
+        print(f"[ERROR] --model must be 'baseline' or 'optimized'")
         sys.exit(1)
 
     format_output(results, args.input)
@@ -158,13 +158,13 @@ def cmd_predict(args):
         out_path = args.input.replace(".json", "_predictions.json")
         with open(out_path, "w") as f:
             json.dump(results, f, indent=2)
-        print(f"[INFO] Prédictions exportées → {out_path}")
+        print(f"[INFO] Predictions exported → {out_path}")
 
 
 def cmd_compare(args):
     import subprocess
     import sys
-    # Délègue à compare.py qui contient déjà toute la logique
+    # Delegates to compare.py which already contains all the logic
     result = subprocess.run(
         [sys.executable, "compare.py"],
         capture_output=False

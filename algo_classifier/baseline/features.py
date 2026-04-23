@@ -1,4 +1,8 @@
-# features.py
+# Feature engineering for the baseline model.
+# Produces two feature groups:
+#   - code features : binary flags for algorithmic patterns in source_code
+#   - meta features : numerical fields (difficulty, text lengths, time limit)
+
 import re
 import numpy as np
 import pandas as pd
@@ -6,8 +10,9 @@ from typing import Optional
 from algo_classifier.baseline.config import TARGET_TAGS
 
 # ------------------------------------------------------------------ #
-# Patterns algorithmiques détectables dans le source_code            #
+# Algorithmic patterns detectable in source_code                     #
 # ------------------------------------------------------------------ #
+# Each key maps to a regex; a match → feature value 1, else 0.
 CODE_PATTERNS = {
     # Math / Number theory
     "import_math":       r"\bimport math\b",
@@ -58,7 +63,7 @@ CODE_PATTERNS = {
     "use_win":           r"\bwin\b",
     "use_lose":          r"\blose\b",
 
-    # Structures de données
+    # Data structures
     "import_heapq":      r"\bimport heapq\b",
     "import_bisect":     r"\bimport bisect\b",
     "use_heap":          r"\bheap\b",
@@ -68,10 +73,7 @@ CODE_PATTERNS = {
 
 
 def extract_code_features(source_code: str) -> dict:
-    """
-    Extrait des features binaires à partir du source_code.
-    Chaque pattern retourne 1 si trouvé, 0 sinon.
-    """
+    """Extract binary features from source_code. Each pattern returns 1 if found, 0 otherwise."""
     if not isinstance(source_code, str):
         return {k: 0 for k in CODE_PATTERNS}
 
@@ -82,22 +84,20 @@ def extract_code_features(source_code: str) -> dict:
     }
 
 def safe_str(val) -> str:
+    """Return str(val), or '' for None/NaN — avoids errors when concatenating text fields."""
     if val is None or (isinstance(val, float) and np.isnan(val)):
         return ""
     return str(val)
 
 def extract_meta_features(row: pd.Series) -> dict:
-    """
-    Extrait les features numériques / méta d'un exemple.
-    """
+    """Extract numerical/meta features from a sample."""
 
-    # Difficulté : remplace -1 et NaN par la médiane (1668)
-    # Difficulté : remplace NaN et -1 par la médiane (1668)
+    # Difficulty: replace -1 and NaN with the median (1668)
     difficulty = row.get("difficulty", 1668)
     if difficulty is None or (isinstance(difficulty, float) and np.isnan(difficulty)) or difficulty < 0:
         difficulty = 1668
 
-    # Time limit : extrait le nombre (ex: "2 seconds" → 2.0)
+    # Time limit: extract the number (e.g. "2 seconds" → 2.0)
     time_limit = 0.0
     raw_time = row.get("prob_desc_time_limit", "")
     if isinstance(raw_time, str):
@@ -105,7 +105,7 @@ def extract_meta_features(row: pd.Series) -> dict:
         if match:
             time_limit = float(match.group())
 
-    # Longueurs des champs texte
+    # Text field lengths — proxy for problem complexity
     desc_len = len(safe_str(row.get("prob_desc_description")))
     code_len = len(safe_str(row.get("source_code")))
     input_spec_len = len(safe_str(row.get("prob_desc_input_spec")))
@@ -119,11 +119,7 @@ def extract_meta_features(row: pd.Series) -> dict:
     }
 
 def build_text_input(row: pd.Series) -> str:
-    """
-    Concatène tous les champs texte en une seule chaîne pour le TF-IDF.
-    Les champs nuls sont remplacés par une chaîne vide.
-    """
-
+    """Concatenate all text fields into a single string for TF-IDF. Null fields are replaced with an empty string."""
     fields = [
         safe_str(row.get("prob_desc_description")),
         safe_str(row.get("prob_desc_input_spec")),
@@ -136,10 +132,10 @@ def build_text_input(row: pd.Series) -> str:
 
 def build_feature_matrix(df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
     """
-    Construit la matrice de features numériques (code patterns + méta).
-    Retourne :
-        - X_meta : np.ndarray de shape (n_samples, n_features)
-        - feature_names : liste des noms de colonnes
+    Build the numerical feature matrix (code patterns + meta).
+    Returns:
+        - X_meta: np.ndarray of shape (n_samples, n_features)
+        - feature_names: list of column names
     """
     rows = []
     for _, row in df.iterrows():
@@ -149,7 +145,7 @@ def build_feature_matrix(df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
 
     feature_df = pd.DataFrame(rows)
 
-    # Vérification : remplace tous les NaN résiduels par 0
+    # Safety check: replace any remaining NaN values with 0
     feature_df = feature_df.fillna(0)
 
     feature_names = list(feature_df.columns)
@@ -162,7 +158,7 @@ if __name__ == "__main__":
     df = load_dataset()
     df = add_binary_tag_columns(df)
 
-    # Test sur un exemple
+    # Test on a sample
     row = df.iloc[0]
     print("=== Text input (extrait) ===")
     print(build_text_input(row)[:300])

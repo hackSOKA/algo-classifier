@@ -1,9 +1,4 @@
-"""
-Point d'entrée pour :
-    python -m algo_classifier <commande> [options]
-ou, après pip install -e . :
-    algo-classifier <commande> [options]
-"""
+"""Entry point for `python -m algo_classifier` and the `algo-classifier` CLI."""
 
 from algo_classifier.cli import main
 

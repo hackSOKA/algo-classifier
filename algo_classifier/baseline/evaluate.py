@@ -53,10 +53,10 @@ def build_y(df):
 
 def evaluate(y_true, y_pred):
     print("\n" + "=" * 65)
-    print("ÉVALUATION DU MODÈLE")
+    print("MODEL EVALUATION")
     print("=" * 65)
 
-    print(f"\n{'Tag':<16} {'Précision':>10} {'Rappel':>10} {'F1':>10} {'Support':>10}")
+    print(f"\n{'Tag':<16} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>10}")
     print("-" * 60)
 
     for i, tag in enumerate(TARGET_TAGS):
@@ -72,31 +72,31 @@ def evaluate(y_true, y_pred):
     hl = hamming_loss(y_true, y_pred)
 
     print(f"\n  {'F1 micro (global)':<30} {f1_micro:.3f}")
-    print(f"  {'F1 macro (moyenne par tag)':<30} {f1_macro:.3f}")
+    print(f"  {'F1 macro (avg per tag)':<30} {f1_macro:.3f}")
     print(f"  {'Hamming Loss':<30} {hl:.4f}")
     print("\n" + "=" * 65 + "\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Évalue le modèle baseline sur un dataset de test."
+        description="Evaluate the baseline model on a test dataset."
     )
     parser.add_argument("--test_path", type=str, default="data/test_set.csv")
     parser.add_argument("--model_dir", type=str, default=MODEL_DIR)
     args = parser.parse_args()
 
-    print("[INFO] Chargement du modèle...")
+    print("[INFO] Loading model...")
     clf, vectorizer, scaler = load_model(args.model_dir)
 
-    print(f"[INFO] Chargement du dataset de test : {args.test_path}")
+    print(f"[INFO] Loading test dataset: {args.test_path}")
     df_test = pd.read_csv(args.test_path)
     df_test["tags"] = df_test["tags"].apply(ast.literal_eval)
 
-    print("[INFO] Construction des features...")
+    print("[INFO] Building features...")
     X_test = build_X(df_test, vectorizer, scaler)
     y_true = build_y(df_test)
 
-    print("[INFO] Prédiction...")
+    print("[INFO] Predicting...")
     y_pred = clf.predict(X_test)
 
     evaluate(y_true, y_pred)

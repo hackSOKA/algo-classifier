@@ -20,7 +20,7 @@ def build_labels(df):
 
 
 def build_feature_pipeline(df):
-    print("[INFO] Construction du texte TF-IDF...")
+    print("[INFO] Building TF-IDF text...")
     texts = df.apply(build_text_input, axis=1).tolist()
 
     vectorizer = TfidfVectorizer(
@@ -32,20 +32,20 @@ def build_feature_pipeline(df):
     X_tfidf = vectorizer.fit_transform(texts)
     print(f"[INFO] TF-IDF shape : {X_tfidf.shape}")
 
-    print("[INFO] Construction des features numériques...")
+    print("[INFO] Building numerical features...")
     X_meta, feature_names = build_feature_matrix(df)
 
     scaler = MaxAbsScaler()
     X_meta_scaled = scaler.fit_transform(X_meta)
 
     X = hstack([X_tfidf, csr_matrix(X_meta_scaled)])
-    print(f"[INFO] Feature matrix finale : {X.shape}")
+    print(f"[INFO] Final feature matrix: {X.shape}")
 
     return X, vectorizer, scaler
 
 
 def train_model(X, y):
-    print("[INFO] Entraînement du modèle...")
+    print("[INFO] Training model...")
     clf = OneVsRestClassifier(
         LogisticRegression(
             max_iter=1000,
@@ -56,7 +56,7 @@ def train_model(X, y):
         n_jobs=-1,
     )
     clf.fit(X, y)
-    print("[INFO] Entraînement terminé.")
+    print("[INFO] Training complete.")
     return clf
 
 
@@ -71,7 +71,7 @@ def save_model(clf, vectorizer, scaler, model_dir=MODEL_DIR):
     with open(model_dir / "scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
 
-    print(f"[INFO] Modèle sauvegardé dans {model_dir}/")
+    print(f"[INFO] Model saved to {model_dir}/")
 
 
 def load_model(model_dir=MODEL_DIR):
@@ -92,10 +92,10 @@ if __name__ == "__main__":
     df = add_binary_tag_columns(df)
 
     df_train, df_test = train_test_split(df, test_size=0.2, random_state=42)
-    print(f"[INFO] Train : {len(df_train)} exemples | Test : {len(df_test)} exemples")
+    print(f"[INFO] Train: {len(df_train)} samples | Test: {len(df_test)} samples")
 
     df_test.to_csv("data/test_set.csv", index=False)
-    print("[INFO] Dataset de test sauvegardé → data/test_set.csv")
+    print("[INFO] Test dataset saved → data/test_set.csv")
 
     X_train, vectorizer, scaler = build_feature_pipeline(df_train)
     y_train = build_labels(df_train)

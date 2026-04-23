@@ -1,3 +1,7 @@
+# Feature engineering for the optimized model.
+# Extends the baseline by adding sentence-transformer embeddings
+# (cached to disk to avoid recomputing on every run).
+
 import re
 import numpy as np
 import pandas as pd
@@ -7,6 +11,7 @@ from algo_classifier.optimized.config import TARGET_TAGS, EMBEDDING_MODEL
 
 EMBEDDINGS_CACHE = Path("models/optimized/embeddings_cache.npy")
 
+# Same pattern dictionary as baseline, extended with more number-theory patterns.
 CODE_PATTERNS = {
     "import_math":        r"\bimport math\b",
     "import_fractions":   r"\bimport fractions\b",
@@ -18,7 +23,7 @@ CODE_PATTERNS = {
     "use_sieve":          r"\bsieve\b",
     "use_euler":          r"\beuler\b",
     "use_totient":        r"\btotient\b",
-    "use_modpow":         r"\bpow\s*\(.*,.*,",
+    "use_modpow":         r"\bpow\s*\(.*,.*,",  # pow(base, exp, mod) pattern
     "use_divisor":        r"\bdivisor\b",
     "use_lcm":            r"\blcm\b",
     "use_coprime":        r"\bcoprime\b",
@@ -63,6 +68,7 @@ CODE_PATTERNS = {
 
 
 def extract_code_features(source_code: str) -> dict:
+    """Return binary pattern matches for source_code (1 = found, 0 = not found)."""
     if not isinstance(source_code, str):
         return {k: 0 for k in CODE_PATTERNS}
     code_lower = source_code.lower()
@@ -73,15 +79,17 @@ def extract_code_features(source_code: str) -> dict:
 
 
 def safe_str(val) -> str:
+    """Return str(val), or '' for None/NaN."""
     if val is None or (isinstance(val, float) and np.isnan(val)):
         return ""
     return str(val)
 
 
 def extract_meta_features(row: pd.Series) -> dict:
+    """Extract numerical/meta features from a sample."""
     difficulty = row.get("difficulty", 1668)
     if difficulty is None or (isinstance(difficulty, float) and np.isnan(difficulty)) or difficulty < 0:
-        difficulty = 1668
+        difficulty = 1668  # replace missing/invalid with dataset median
 
     time_limit = 0.0
     raw_time = row.get("prob_desc_time_limit", "")
@@ -104,6 +112,7 @@ def extract_meta_features(row: pd.Series) -> dict:
 
 
 def build_text_input(row: pd.Series) -> str:
+    """Concatenate all text fields into one string for TF-IDF or embedding."""
     fields = [
         safe_str(row.get("prob_desc_description")),
         safe_str(row.get("prob_desc_input_spec")),
@@ -115,23 +124,33 @@ def build_text_input(row: pd.Series) -> str:
 
 
 def extract_embeddings(texts: list[str] = None) -> np.ndarray:
+    """
+    Return sentence-transformer embeddings for all exercises.
+    Uses a .npy cache to avoid recomputing (~10-20 min on CPU) on every run.
+    """
     if EMBEDDINGS_CACHE.exists():
-        print("[INFO] Embeddings chargés depuis le cache.")
+        print("[INFO] Embeddings loaded from cache.")
         return np.load(EMBEDDINGS_CACHE)
 
-    print("[INFO] Génération des embeddings (première fois, ~10-20 min CPU)...")
+    # First run: encode all texts and persist to disk.
+    print("[INFO] Generating embeddings (first run, ~10-20 min CPU)...")
     from sentence_transformers import SentenceTransformer
     model = SentenceTransformer(EMBEDDING_MODEL)
     X_emb = model.encode(texts, show_progress_bar=True, batch_size=64)
 
     EMBEDDINGS_CACHE.parent.mkdir(parents=True, exist_ok=True)
     np.save(EMBEDDINGS_CACHE, X_emb)
-    print(f"[INFO] Embeddings sauvegardés → {EMBEDDINGS_CACHE}")
+    print(f"[INFO] Embeddings saved → {EMBEDDINGS_CACHE}")
 
     return X_emb
 
 
 def build_feature_matrix(df: pd.DataFrame, indices: np.ndarray = None) -> tuple[np.ndarray, list[str]]:
+    """
+    Build the combined feature matrix: code patterns + meta + sentence embeddings.
+    `indices` selects the embedding rows that correspond to df (used when df is a
+    subset of the full dataset whose embeddings are cached globally).
+    """
     rows = []
     for _, row in df.iterrows():
         meta = extract_meta_features(row)
@@ -145,11 +164,13 @@ def build_feature_matrix(df: pd.DataFrame, indices: np.ndarray = None) -> tuple[
     texts = df.apply(build_text_input, axis=1).tolist()
     X_emb_full = extract_embeddings(texts if not EMBEDDINGS_CACHE.exists() else None)
 
+    # Slice only the rows that belong to df (train or test subset).
     if indices is not None:
         X_emb = X_emb_full[indices]
     else:
         X_emb = X_emb_full[:len(df)]
 
+    # Horizontally stack meta features and embeddings into a single matrix.
     feature_names = feature_names + [f"emb_{i}" for i in range(X_emb.shape[1])]
     X_meta = np.hstack([X_meta, X_emb])
 
