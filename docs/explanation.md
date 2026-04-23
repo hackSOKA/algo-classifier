@@ -585,9 +585,251 @@ Les seuils sont optimisés sur le même set que celui utilisé pour l'évaluatio
 
 ---
 
-*Document mis à jour au fur et à mesure du développement.*---
+## 16. Les 5 meta-features — pourquoi ce choix ?
 
-## 16. C'est quoi un module CLI ?
+### Pourquoi les meta-features ?
+
+TF-IDF et les embeddings capturent le **contenu textuel**, mais oublient les **signaux structurels** des problèmes. Deux exercices avec du vocabulaire différent peuvent avoir la même difficulté ou la même complexité algorithmique. Les meta-features comblent ce gap.
+
+### Détail des 5 features
+
+**1. `difficulty` (note Codeforces)**
+- Plage : 800–3500
+- Sens : problèmes plus difficiles corrèlent avec des algorithmes plus avancés (graphs, trees, geometry)
+- Exemple : un problème tagué `geometry` a généralement une difficulté > 1500
+- Utilité : LightGBM peut apprendre "si difficulty > 2000 ET contains('sqrt'), alors geometry"
+
+**2. `time_limit` (limite de temps CPU en secondes)**
+- Plage : 0.5–3.0 secondes
+- Sens : un time limit serré (1 sec) sur un problème difficile signale qu'un algo efficace est requis
+- Exemple : "difficulty=1800 + time_limit=1sec" → probabilité élevée de `graphs` (Dijkstra) ou `trees` (DFS/BFS)
+- Utilité : discrimine les problèmes qui demandent une approche computationnelle rapide vs mathématique
+
+**3. `desc_len` (longueur de l'énoncé en caractères)**
+- Plage : 200–5000 caractères
+- Sens : problèmes longs donnent souvent plus de contexte (donc plus d'indices sur le tag)
+- Exemple : un exercice de `geometry` avec des coordonnées a généralement une description détaillée
+- Utilité : proxy indirect pour la complexité descriptive du problème
+
+**4. `code_len` (longueur du source code de référence)**
+- Plage : 100–2000 caractères
+- Sens : certains algorithmes nécessitent plus de code (DFS récursif vs brute force)
+- Exemple : un `trees` classique (BFS/DFS) ≈ 150–300 caractères, mais un `trees` avec LCA ≈ 500+
+- Utilité : signal sur la complexité implémentationnelle de la solution
+
+**5. `input_spec_len` (longueur de la spécification d'entrée)**
+- Plage : 50–1000 caractères
+- Sens : problèmes avec entrées complexes (matrices, graphes explicites) donnent plus de détails
+- Exemple : une description "input: first line n, then n edges" est spécifique aux `graphs`
+- Utilité : discrimine les problèmes structurés vs mathématiques purs
+
+### Imputation des valeurs manquantes
+
+Si un champ est `NaN` :
+- `difficulty` → remplacée par la médiane (1668)
+- `time_limit` → remplacée par 0.0 (défaut)
+- autres → remplacées par 0.0
+
+La **médiane** est préférée à la **moyenne** car elle ignore les valeurs aberrantes (`difficulty = -1`).
+
+---
+
+## 17. Data augmentation — créer des données synthétiques
+
+### C'est quoi la data augmentation ?
+
+C'est une technique pour **créer artificiellement de nouveaux exemples d'entraînement** à partir des exemples existants. Utile quand on a peu de données, surtout pour les classes rares.
+
+### Pourquoi c'est utile ici
+
+Le dataset est **déséquilibré** :
+```
+math          → 1410 exemples (28.3%)  ✅ suffisant
+probabilities →   90 exemples (1.8%)   ⚠️ très rare
+games         →   70 exemples (1.4%)   ⚠️ très rare
+```
+
+Avec seulement 70-90 exemples, LightGBM n'apprend pas bien. Data augmentation peut doubler ou tripler les exemples.
+
+### Stratégies
+
+**1. Paraphrase syntaxique**
+```
+Original  : "Find the shortest path using Dijkstra"
+Augmentée : "Implement Dijkstra algorithm to find shortest path"
+```
+Même info, nouveaux tokens → TF-IDF génère des n-grammes différents.
+
+**2. Mixup (interpolation)**
+```python
+X_aug = 0.7 * X_exercice_A + 0.3 * X_exercice_B
+y_aug = (y_A + y_B) / 2  # labels moyennés
+```
+
+**3. Oversampling simple**
+Dupliquer les exemples rares avec petite perturbation.
+
+**4. Back-translation (avec LLM)**
+Traduire en anglais → français → anglais (perte d'info = augmentation).
+
+### Risques
+
+- **Over-augmentation** : si 90% des données sont synthétiques, le modèle échoue sur les données réelles
+- **Label noise** : paraphrase peut changer le sens → mauvais labels
+- **Data leakage** : un exemple augmenté trop similaire au test set
+
+**Recommandation** : augmenter modérément (2x-3x) seulement les classes rares.
+
+---
+
+## 18. Cross-validation — évaluation robuste
+
+### C'est quoi la cross-validation ?
+
+Au lieu d'un split unique train/test, on divise les données en K folds (ex: 5) :
+
+```
+Dataset complet
+├── Fold 1 : test, reste train  → score 1
+├── Fold 2 : test, reste train  → score 2
+├── Fold 3 : test, reste train  → score 3
+├── Fold 4 : test, reste train  → score 4
+└── Fold 5 : test, reste train  → score 5
+
+Score final = moyenne([score1, score2, score3, score4, score5])
+```
+
+### Pourquoi c'est utile
+
+**Problème du split unique :**
+Un split peut être **chanceux** (test set facile) ou **malchanceux** (test set difficile). Cross-validation moyenne ce bruit et donne une **variance** — on sait si le modèle est stable ou instable.
+
+```
+CV scores : [0.680, 0.685, 0.679, 0.690, 0.681]
+Moyenne : 0.683
+Std : 0.005  ← très stable ✅
+
+vs.
+
+CV scores : [0.60, 0.75, 0.62, 0.72, 0.68]
+Moyenne : 0.674
+Std : 0.055  ← très instable ⚠️
+```
+
+### Quand l'utiliser
+
+- Hyperparameter tuning (GridSearch utilise K-fold CV)
+- Données petites (< 10k exemples)
+- Multi-label avec classes rares
+
+**Ici** : utiliser `MultilabelStratifiedKFold` (5 folds) car elle assure que **chaque fold a la même distribution de tags**.
+
+```python
+from iterative_stratification import MultilabelStratifiedKFold
+
+mskf = MultilabelStratifiedKFold(n_splits=5, random_state=42)
+for train_idx, test_idx in mskf.split(X, y):
+    # Chaque fold contient approximativement les mêmes % de chaque tag
+    pass
+```
+
+---
+
+## 19. Choix du modèle d'embeddings `all-MiniLM-L6-v2`
+
+### C'est quoi ce nom ?
+
+Décomposition :
+- **all** → pour tous les cas (phrase entière)
+- **MiniLM** → version comprimée (distillée) de BERT-Large
+- **L6** → 6 couches de Transformer
+- **v2** → version 2
+
+### Trade-off : vitesse vs qualité
+
+| Modèle | Dimensions | Temps / 4982 ex | F1 estimé | Coût |
+|---|---|---|---|---|
+| `all-MiniLM-L6-v2` | 384 | 15 min | 0.684 | Gratuit ✅ |
+| `all-mpnet-base-v2` | 768 | 40 min | 0.700–0.710 | Gratuit |
+| `text-embedding-3-large` (OpenAI) | 3072 | API | 0.720+ | $$$ |
+
+### Pourquoi ce modèle ?
+
+**Raison 1 — Vitesse** : 15 min acceptable, cache instantané après.
+
+**Raison 2 — Mémoire** : 384 dims = 7.3 MB cache vs 58 MB pour 3072 dims.
+
+**Raison 3 — Performance suffisante** : F1 +0.063 déjà excellent. Passer à mpnet → +0.02 seulement. Pas justifié.
+
+**Raison 4 — Open-source** : pas d'API key, offline, reproductibilité garantie.
+
+### Quand upgrader ?
+
+Si F1 macro atteint 0.70–0.72, essayer `all-mpnet-base-v2` ou OpenAI pour +1–3 points.
+
+---
+
+## 20. Architecture production — API FastAPI + Redis
+
+### Vue d'ensemble
+
+Développement :
+```
+Exercice JSON → [CLI] → Prédiction → console
+```
+
+Production :
+```
+Exercice JSON → [API REST] → Cache Redis → Embeddings + LightGBM → JSON
+                                ↑
+                            [Monitoring]
+```
+
+### Pourquoi FastAPI ?
+
+Framework ultra-rapide pour APIs REST. Avantages :
+- `/docs` auto-généré (Swagger UI)
+- Type hints → validation auto
+- Async natif → traite 100 requêtes en parallèle
+- Déploiement facile (Uvicorn, Docker, cloud)
+
+### Pourquoi Redis ?
+
+Cache ultra-rapide en mémoire. **Problème** : générer un embedding prend 15 secondes. **Solution** : mettre en cache.
+
+```
+Même requête 100 fois → 1ère : 15s, les 99 autres : < 100ms
+```
+
+### Monitoring — metrics clés
+
+**P@K (Precision@K)** : parmi les K prédictions top, combien sont correctes ?
+
+**Coverage par tag** : quel % de requêtes reçoivent chaque tag ?
+```
+math : 45% (attendu 28%, décalage ?)
+```
+Signal : si `probabilities` passe de 1.8% → 0.3%, le modèle s'est dégradé.
+
+**Dérive de performance** : F1 réel sur les nouveaux exercices (feedback humain).
+Si F1 macro < 0.65 → retrain ou rollback.
+
+### Latence < 500ms
+
+```
+100 ms : I/O réseau
+150 ms : TF-IDF + métafeatures
+150 ms : LightGBM (8 modèles parallèles)
+ 50 ms : JSON + réponse
+------
+450 ms total ✅
+```
+
+Avec cache Redis : < 50ms pour exercice vu avant.
+
+---
+
+## 21. C'est quoi un module CLI ?
 
 ### CLI = Command Line Interface
 
@@ -706,7 +948,7 @@ Le `-e` signifie "editable". Au lieu de copier ton code dans `site-packages`, pi
 
 ---
 
-## 17. Pourquoi ces choix d'architecture CLI
+## 22. Pourquoi ces choix d'architecture CLI
 
 ### Pourquoi `__main__.py` + `pyproject.toml` et pas juste `cli.py` à la racine ?
 
@@ -801,7 +1043,7 @@ La vraie refactorisation propre serait d'importer `compare.py` directement comme
 
 ---
 
-## 18. Les nouveaux fichiers — rôle et contenu
+## 23. Les nouveaux fichiers — rôle et contenu
 
 ### `algo_classifier/__init__.py`
 
@@ -888,7 +1130,7 @@ Après le déplacement dans `algo_classifier/`, la racine du projet ne contient 
 
 ---
 
-## 19. Récapitulatif — ce que le CLI apporte au projet
+## 24. Récapitulatif — ce que le CLI apporte au projet
 
 | Avant | Après |
 |---|---|
@@ -902,3 +1144,7 @@ Après le déplacement dans `algo_classifier/`, la racine du projet ne contient 
 | Script à copier-coller pour un collègue | `pip install -e . && algo-classifier --help` |
 
 Le CLI transforme une collection de scripts en un **outil utilisable** — c'est la différence entre un projet de data scientist et un projet d'ingénieur.
+
+---
+
+*Document mis à jour et complété en avril 2026.*
