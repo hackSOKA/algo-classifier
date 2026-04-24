@@ -197,6 +197,18 @@ où `σ` est la sigmoïde qui écrase la sortie entre 0 et 1. Si `P > 0.5` → t
 
 **C'est quoi OneVsRestClassifier ?**
 Comme on a 8 tags, on entraîne **8 classifieurs indépendants** — un par tag. Chacun répond oui/non pour son tag.
+OneVsRestClassifier — c'est une stratégie qui convertit le problème multi-label en 8 problèmes binaires indépendants.
+Pour chaque tag, j'entraîne une LogisticRegression qui répond à une question binaire :
+
+Classifieur 1 : "Est-ce que c'est du math ?" → Oui/Non
+Classifieur 2 : "Est-ce que c'est des graphs ?" → Oui/Non
+Classifieur 3 : "Est-ce que c'est des strings ?" → Oui/Non
+... (8 classifieurs au total)
+
+Pourquoi ça marche ?
+Parce que les tags ne sont pas mutuellement exclusifs. Un exercice peut être math ET geometry sans contradiction. OneVsRest traite chaque tag indépendamment, ce qui est exactement ce qu'on veut ici.
+Avec LightGBM c'est pareil — même structure OneVsRest, juste 8 LGBMs au lieu de 8 LogisticRegressions.
+Avantage clé : les seuils sont optimisables par tag. probabilities peut avoir un seuil de 0.15 (très agressif) tandis que math a un seuil de 0.35 — chacun calibré pour maximiser son F1 propre."
 
 **C'est quoi `class_weight='balanced'` ?**
 Comme certains tags sont rares (1.8% pour `probabilities`), sans correction le modèle les ignorerait. `class_weight='balanced'` donne plus d'importance aux exemples rares pendant l'entraînement pour compenser le déséquilibre.
